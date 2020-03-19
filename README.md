@@ -16,20 +16,20 @@ HAL is an expert chatbot that will improve its knowledge from the organization's
 ## Links
 - [Chatbot client](https://s3.amazonaws.com/hal-bot/client.html)
 - [Stats and admin page](https://s3.amazonaws.com/hal-bot/stats.html)
-- [Q&A designer](https://bju7yzad46.execute-api.us-east-1.amazonaws.com/prod/pages/designer) (User: Admin  Pass: Welcome2OSB!)
+- [Q&A designer](https://bju7yzad46.execute-api.us-east-1.amazonaws.com/prod/pages/designer) (User: Admin  Pass: W**********!)
 
 ## Personas
 
 End-Users:
-- Scarlet Johansson (sjohansson@devosbgroup.onmicrosoft.com)
-- Brad Pitt (bpitt@devosbgroup.onmicrosoft.com)
-- Angelina Jolie (ajolie@devosbgroup.onmicrosoft.com)
+- Scarlet Johansson 
+- Brad Pitt
+- Angelina Jolie 
 
 Experts: 
-- Dwayne Johnson (rscott@devosbgroup.onmicrosoft.com)
-- Ridley Scott (rscott@devosbgroup.onmicrosoft.com) - Generalist
-- Peter Jackson (pjackson@devosbgroup.onmicrosoft.com)
-- Jennifer Lawrence (jlawrence@devosbgroup.onmicrosoft.com)
+- Dwayne Johnson 
+- Ridley Scott
+- Peter Jackson 
+- Jennifer Lawrence 
  
 Please check stats page to know which skills are configured for each expert.
 
