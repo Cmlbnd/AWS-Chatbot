@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>HAL - The expert network bot</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.41.0.min.js"></script>
+     <!-- Compiled and minified CSS -->
+	 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+	 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+     <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="container" id="questionContainer">
+		<div id="modalAnswerSubmitted" class="modal">
+			<div class="modal-header-success">
+				<i class="material-icons" style="margin-right: 10px">check</i>
+				<h5>THANK YOU</h5>
+			</div>
+			<div class="modal-content">
+				<p>Your answer to this question has been submitted correctly.</p>
+			</div>
+			<!--<div class="modal-footer">
+				<a href="#!" class="modal-close waves-effect waves-green btn-flat">Agree</a>
+			</div> -->
+		</div>
+		<div id="modalError" class="modal">
+			<div class="modal-header-error">
+				<i class="material-icons" style="margin-right: 10px">warning</i>
+				<h5>ERROR</h5>
+			</div>
+			<div class="modal-content">
+				<p id="errorMessage">...</p>
+			</div>
+		</div>
+		<h3 style="text-align:  left">
+			<img src="HAL_logo.png" height="80" alt="HAL - The expert network bot" style="margin-bottom: -25px"/>
+			HAL - The expert network bot
+		</h3>
+		<div class="row" id="mainContent" style="display: none">
+			<div class="col s6 borderRight" style="padding-right: 30px" id="conversation">
+				<h5 class="sectionTitle">Original Conversation</h5>
+			</div>
+			<div class="col s5 questionDetails" style="padding-left: 30px">
+				<h5 class="sectionTitle">Question</h5>
+				<p style="font-weight: 600" id="questionText"></p>
+				<div class="input-field" style="margin-top:40px" id="answerContainer">
+					<textarea id="answer" class="materialize-textarea"></textarea>
+					<label for="answer">Your answer</label>
+					<span class="helper-text" data-error="wrong" data-success="right">Your anwser will be stored in our DB and shared with anyone else asking the same question to HAL</span>
+				</div>
+				<div class="input-field" style="margin-top:40px" id="commentsContainer">
+					<textarea id="comments" class="materialize-textarea"></textarea>
+					<label for="comments">Comments</label>
+					<span class="helper-text" data-error="wrong" data-success="right">These comments will only be visible to this customer</span>
+				</div>
+
+				<button class="btn waves-effect waves-light" style="float:right" id="submitAnswer">Submit
+					<i class="material-icons right">send</i>
+				</button>
+				
+				<div id="feedbackContainer" style="display: none">
+					<p style="margin-top: 40px">How do you rate this answer?</p>
+					<p>
+						<label class="rateItem">
+							<input class="inputRateAnswer" name="rate-${id}" type="radio" value="NOT_ANSWERING" />
+							<span>Doesn't answer my question</span>
+						</label>    
+						</p>
+						<p>
+						<label class="rateItem">
+							<input class="inputRateAnswer" name="rate-${id}" type="radio" value="NOT_COMPLETE" />
+							<span>Answer is not complete</span>
+						</label>
+						</p>
+						<p>
+						<label class="rateItem">
+							<input class="inputRateAnswer" name="rate-${id}" type="radio" value="GOOD_ANSWER"/>
+							<span>This is a good answer</span>
+						</label>
+					</p>
+
+					<div id="additionalFeedbackContainer" style="display:none">
+						<h5 class="sectionTitle">Additional information</h5>
+						<span style="color: rgba(0,0,0,0.54); font-size: 12px;">This section allows the user and expert to communicate directly to clarify the answer of this question.</span>
+						<div id="additionalConversation" style="display: none">
+
+						</div>
+						
+						<div class="input-field" style="margin-top:20px" id="commentContainer">
+							<textarea id="comment" class="materialize-textarea"></textarea>
+							<label for="comment">Comment</label>
+						</div>
+						<div class="input-field" style="margin-top: 30px">
+							<select id="commentUser">
+							  <option value="USER">User</option>
+							  <option value="EXPERT">Expert</option>
+							</select>
+							<label for="commentUser">Who's replying</label>
+						</div>
+						<button class="btn waves-effect waves-light" style="float:right" id="submitComment">Send
+							<i class="material-icons right">send</i>
+						</button>
+					</div>
+				</div>
+
+				
+				<div class="preloader-wrapper small active" style="float:right; display:none" id="submitLoading">
+					<div class="spinner-layer" style="border-color: #062f6e;">
+						<div class="circle-clipper left">
+						<div class="circle"></div>
+						</div><div class="gap-patch">
+						<div class="circle"></div>
+						</div><div class="circle-clipper right">
+						<div class="circle"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="loading" style="padding:150px">
+			<div class="progress" style="background-color: #bbdefb">
+				<div class="indeterminate" style="background-color: #062f6e"></div>
+			</div>
+		</div>
+	</div>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+	<!-- Compiled and minified JavaScript -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/moment@2.24.0/moment.min.js"></script>
+	<script src="scripts.js"></script>
+
+	<script type="text/javascript">
+		
+	const GET_QUESTIONS_URL = "https://ldy3aeach5.execute-api.us-east-1.amazonaws.com/test/unknown-questions";
+	const SUBMIT_ANSWER_URL = "https://ldy3aeach5.execute-api.us-east-1.amazonaws.com/test/submit-answer";
+
+	var conversationHistoryObj = [];
+
+	function populateConversation() {
+		for(var i = 0; i < conversationHistoryObj.length; i++) {
+			message = conversationHistoryObj[i];
+			showMessage(message.message, message.type);
+		}
+	}
+	function handleRatingSelection(feedbackValue) {
+		if(feedbackValue === RATING_TYPES.NOT_ANSWERING) {
+			$('#additionalFeedbackContainer').show();
+		}
+		else if(feedbackValue === RATING_TYPES.NOT_COMPLETE){
+			$('#additionalFeedbackContainer').show();
+		}
+		$(".inputRateAnswer").attr('disabled', "disabled");
+	}
+	function populateAnswer(answer, comments) {
+		$('#answerContainer').html('<span class="label">Answer:</span><span class="content">'+answer+'</span>');
+		if(comments && comments.trim() !== "" ){
+			$('#commentsContainer').html('<span class="label">Expert Comment:</span><span class="content">'+comments+'</span>');
+		}
+		else {
+			$('#commentsContainer').html('');
+		}
+		$('#submitAnswer').hide();
+
+		$("#feedbackContainer").show();
+		$(".inputRateAnswer").click(function () {
+			var url = new URL(window.location.href);
+			var uid = url.searchParams.get("uid")
+
+			var feedbackValue = $(this).val();
+			
+			handleRatingSelection(feedbackValue);
+			
+			submitRating(uid, feedbackValue,  RATING_SOURCE.END_USER);
+		});
+	}
+
+	function populateAdditionalComments(additionalComments) {
+	
+		var html = "";
+		var lastCommentUser = undefined;
+		for(var i = 0; i < additionalComments.length; i++) {
+			var comment = additionalComments[i];
+
+			var author = comment.user === "EXPERT" ? 'Expert' : 'User';
+			var timeString = moment(comment.timestamp).fromNow();
+			lastCommentUser = comment.user;
+			html += "<p>"+comment.comment+"</p><p class='comment-metadata'>"+author+" - "+timeString+"</p>";
+		}
+		if(lastCommentUser === "EXPERT") {
+			$('#commentUser').val("USER");
+		}
+		else {
+			$('#commentUser').val("EXPERT");
+		}
+		$('#commentUser').formSelect(); // reinitialize materialize select field
+
+		$('#additionalConversation').html(html);
+		$('#additionalConversation').show();
+	}
+
+	function showError(errorMessage, dismissible = true) {
+		$('#errorMessage').text(errorMessage);
+		$('#modalError').modal({dismissible});
+		var instance = M.Modal.getInstance($('#modalError'));
+		instance.open();
+		console.error(errorMessage);
+	}
+	$( document ).ready(function() {
+
+		$('select').formSelect();
+
+		var url = new URL(window.location.href);
+		var uid = url.searchParams.get("uid")
+		if(!uid) {
+			showError("No uid provided in the url");
+		}
+		else {
+			$.ajax({
+				 type: "GET",
+				 url: GET_QUESTIONS_URL+"?uid="+uid, 
+				 crossDomain: true,
+				 contentType: "application/json",
+				 success: function( data ){
+					console.log(data);
+					$('#questionText').text(data.question);
+					conversationHistoryObj = data.conversation;
+					populateConversation();
+
+					if(data.answer && data.answer.trim() !== "")  {
+						populateAnswer(data.answer, data.comments);
+						if(data.ratings ){
+							let ratingObject = data.ratings.find(function(el) {
+								return el.ratingSource === "END_USER";
+							})
+							if(ratingObject) {
+								$("input.inputRateAnswer[value='"+ratingObject.rating+"']").prop("checked",true);
+								handleRatingSelection(ratingObject.rating);
+							}
+						}
+						if(data.additionalComments) {
+							populateAdditionalComments(data.additionalComments);
+						}
+					}
+					$('#loading').hide();
+					$('#mainContent').show();
+				},
+				error: function(error) {
+					
+					showError(error.responseJSON.error, false);
+					$('#loading').hide();
+				}
+			});
+		}
+
+		$('#submitAnswer').click(function(e) {
+			var answer = $('#answer').val();
+			var comments = $('#comments').val();
+			$('#submitLoading').show();
+			$('#submitAnswer').hide();
+			$.ajax({
+				type: "POST",
+				url: SUBMIT_ANSWER_URL, 
+				data: JSON.stringify({
+					answer,
+					uid,
+					comments
+				}),
+				crossDomain: true,
+				contentType: "json",
+				dataType: "json",
+				success: function( data ){
+					populateAnswer(answer, comments);
+					$('#modalAnswerSubmitted').modal({dismissible: true});
+					var instance = M.Modal.getInstance($('#modalAnswerSubmitted'));
+					instance.open();
+					console.log(data);
+					$('#submitLoading').hide();
+				}, 
+				error: function(error) {
+					if(error && error.responseJSON && error.responseJSON.error) {
+						showError(error.responseJSON.error);
+						$('#submitAnswer').show();
+					}
+					else {
+						populateAnswer(answer, comments);
+						$('#modalAnswerSubmitted').modal({dismissible: true});
+						var instance = M.Modal.getInstance($('#modalAnswerSubmitted'));
+						instance.open();
+						console.error(error);
+						$('#submitLoading').hide();
+						//showError("An unknown error occurred, please check console for more details.");
+					}
+					
+					$('#submitLoading').hide();
+				}
+			});
+			e.preventDefault();
+		});
+		$('#submitComment').click(async function(e) {
+			var comment = $('#comment').val();
+			var user = $('#commentUser').val();
+			$('#submitLoading').show();
+			$('#submitComment').hide();
+
+			try {
+				var result = await submitComment(uid, comment, user);
+				console.log(result);
+				var additionalComments = result['Attributes']['additionalComments'];
+				populateAdditionalComments(additionalComments);
+				$('#comment').val('');
+			}
+			catch(e) {
+				if(error && error.responseJSON && error.responseJSON.error) {
+					showError(error.responseJSON.error);
+				}
+				else {
+					showError("An unknown error occurred, please check console for more details.");
+				}
+			}
+			$('#submitLoading').hide();
+			$('#submitComment').show();
+			// $.ajax({
+			// 	type: "POST",
+			// 	url: SUBMIT_ANSWER_URL, 
+			// 	data: JSON.stringify({
+			// 		answer,
+			// 		uid,
+			// 		comments
+			// 	}),
+			// 	crossDomain: true,
+			// 	contentType: "json",
+			// 	dataType: "json",
+			// 	success: function( data ){
+			// 		populateAnswer(answer, comments);
+			// 		$('#modalAnswerSubmitted').modal({dismissible: true});
+			// 		var instance = M.Modal.getInstance($('#modalAnswerSubmitted'));
+			// 		instance.open();
+			// 		console.log(data);
+			// 		$('#submitLoading').hide();
+			// 	}, 
+			// 	error: function(error) {
+			// 		if(error && error.responseJSON && error.responseJSON.error) {
+			// 			showError(error.responseJSON.error);
+			// 		}
+			// 		else {
+			// 			showError("An unknown error occurred, please check console for more details.");
+			// 		}
+			// 		$('#submitAnswer').show();
+			// 		$('#submitLoading').hide();
+			// 	}
+			// });
+			e.preventDefault();
+		});
+		
+		
+	});
+		
+	</script>
+</body>
+
+</html>

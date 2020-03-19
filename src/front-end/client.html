@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>HAL - The expert network bot</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.437.0.min.js"></script>
+     <!-- Compiled and minified CSS -->
+	 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+	 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+     <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div id="profileContainer" style="display: none">
+		<div class="row">
+			<a class='dropdown-trigger' href='#' data-target='profileSelection' style="height: 75px; display: block">
+				<div class="s12" style="text-align: center">
+					<img class="avatar" src="images/ajolie.jpg" id="profilePhoto" />	
+				</div>
+				
+				<div class="s12" style="text-align: center">
+					<span class="avatarSubtitle" id="profileName">Angelina Jolie</span>
+				</div>
+			</a>
+			<ul id='profileSelection' class='dropdown-content'>
+				<li>
+					<a href="?user=sjohansson">
+						<img class="avatar avatar-menu" src="images/sjohansson.jpg" />
+						<span>Scarlet Johansson</span>
+					</a>
+				</li>
+				
+				<li>
+					<a href="?user=ajolie" disabled="disabled">
+						<img class="avatar avatar-menu" src="images/ajolie.jpg" /> 
+						<span>Angelina Jolie</span>
+					</a>
+				</li>
+				
+				<li >
+					<a href="?user=bpitt">
+						<img class="avatar avatar-menu" src="images/bpitt.jpg" />
+						<span>Brad Pitt</span>
+					</a>
+				</li>
+				
+			</ul>
+		</div>
+	</div>
+	<div class="container" id="clientContainer">
+		<h3 style="text-align:  left">
+			<img src="HAL_logo.png" height="80" alt="HAL - The expert network bot" style="margin-bottom: -25px"/>
+			HAL - The expert network bot
+		</h3>
+		<div class="overflowConversation" id="conversation"></div>
+		<form id="chatform">
+			<input type="text" id="wisdom" size="80" value="" placeholder="Ask me something...">
+			<i class="samll material-icons grow" id="sendIcon">send</i>
+		</form>
+		<div class="spinner" id="typingSpinner" style="display: none">
+			<div class="bounce1"></div><div class="bounce2"></div><div class="bounce3"></div>
+		</div>
+	</div>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+	<!-- Compiled and minified JavaScript -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+	<script src="scripts.js"></script>
+	<script type="text/javascript">
+		// set the focus to the input box
+		document.getElementById("wisdom").focus();
+
+		// Initialize the Amazon Cognito credentials provider
+		AWS.config.region = 'us-east-1'; // Region
+		AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+		    // Provide your Pool Id here
+			IdentityPoolId: 'us-east-1:bee929ee-bd48-432e-bd1b-fe3ab0bb0c13',
+		});
+
+		var lexruntime = new AWS.LexRuntime();
+		var lexUserId = 'chatbot-demo' + Date.now();
+		var sessionAttributes = {};
+		var isUnknownQuestion = false;
+		var unknownQuestion = undefined;
+		var unknownQuestionQid = undefined;
+		var lastMessage = undefined;
+        const BOT_NAME = "QnABot_BotLk";
+        
+		const FIND_EXPERT_URL = "https://ldy3aeach5.execute-api.us-east-1.amazonaws.com/test/find-expert"
+
+		var user = {
+			name: "Scarlet Johansson",
+			email: "sjohansson@devosbgroup.onmicrosoft.com",
+			photo: "images/sjohansson.jpg"
+		}
+		
+		function emailIsValid (email) {
+			return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+		}
+		var inputDisabled = false;
+		function disableInput(msg = "  ") {
+			var wisdomText = document.getElementById('wisdom');
+			wisdomText.value = msg;
+			wisdomText.locked = true;
+			wisdomText.disabled = true;
+			inputDisabled = true;
+			if(msg.trim() === "") {
+				$("#typingSpinner").show();
+			}
+		}
+		function enableInput() {
+			var wisdomText = document.getElementById('wisdom');
+			wisdomText.value = '';
+			wisdomText.locked = false;
+			wisdomText.disabled = false;
+			wisdomText.focus();
+			inputDisabled = false;
+			$("#typingSpinner").hide();
+		}
+		function findExpert() {
+			disableInput();
+			$.ajax({
+				type: "POST",
+				url: FIND_EXPERT_URL, 
+				data: JSON.stringify({
+					question: unknownQuestion,
+					conversation: conversationHistory,
+					customerEmail: user.email
+				}),
+				crossDomain: true,
+				contentType: "application/json ",
+				dataType: "json",
+				success: function( data ){
+					console.log(data);
+					var expertName = data.expert.firstName;
+					console.log(`https://s3.amazonaws.com/hal-bot/question.html?uid=${data.uid}`);
+					showMessage(`Ok, I found our expert ${expertName} that can help you. He will contact you by email with an answer to your question.`, MESSAGE_TYPES.BOT);
+					setTimeout(function(){ 
+						showMessage("Is there something else that I can help you with?", MESSAGE_TYPES.BOT);
+						isUnknownQuestion = false;
+						// re-enable input
+						enableInput();
+					}, 200);
+				},
+				error: function(jqXHR, textStatus, errorThrown ) {
+					console.error({jqXHR, textStatus, errorThrown});
+					showMessage(`It seems I was not able to understand your question, would you mind rephrasing it?`, MESSAGE_TYPES.CONFIRMATION);
+					isUnknownQuestion = false;
+					// re-enable input
+					enableInput();
+				}
+			});
+		}
+		function showFindExpertButtons() {
+			disableInput('Please click one of the options above...')
+			showButtons([
+				{
+					label: "Yes",
+					clickFunction: function() {
+						$(".buttonsContainer").hide();
+						//alert("yes")
+						showMessage("Yes", MESSAGE_TYPES.USER);
+						findExpert();
+					}
+				},
+				{
+					label: "No", 
+					clickFunction: function() {
+						$(".buttonsContainer").hide();
+
+						showMessage("No", MESSAGE_TYPES.USER);
+						setTimeout(function(){
+							showMessage("No problem, is there anything else I can help you with?", MESSAGE_TYPES.BOT);
+							enableInput();
+						}, 200);
+					}
+				}
+			]);
+		}
+
+		function showUnknownQuestion() {
+			isUnknownQuestion = true;
+			unknownQuestion = lastMessage;
+			console.log("Unknown question: "+unknownQuestion);
+
+			showMessage("Unfortunately I don't know the answer to your question but I can put you in contact with one of our experts.", MESSAGE_TYPES.CONFIRMATION)
+			setTimeout(function(){ 
+				//showMessage("Do you want me to contact an expert to help you? If so, just let me know your email. Otherwise, ask me something else.", MESSAGE_TYPES.CONFIRMATION);
+				showMessage("Do you want me to contact an expert to help you?", MESSAGE_TYPES.CONFIRMATION);
+				showFindExpertButtons();
+			}, 200);
+		}
+
+		function askExpertHelp() {
+			isUnknownQuestion = true;
+			unknownQuestion = lastMessage;
+			console.log("Asking help for question: "+unknownQuestion);
+
+			showMessage("Sorry to hear that this answer is not helping you but I can put you in contact with one of our experts to help you further with this issue.", MESSAGE_TYPES.CONFIRMATION)
+			setTimeout(function(){ 
+				showMessage("Do you want me to contact an expert to help you?", MESSAGE_TYPES.CONFIRMATION);
+				showFindExpertButtons();
+			}, 200);
+		}
+
+		function feedbackClicked(id) {
+			var feedbackValue = $(`input:radio[name='rate-${id}']:checked`).val();
+			unknownQuestionQid = id;
+			var uid = id.substring(id.indexOf('.') + 1);
+			console.log(uid+ " value: "+feedbackValue);
+			if(feedbackValue === RATING_TYPES.NOT_ANSWERING) {
+				addToConversationHistory("Doesn't answer my question", MESSAGE_TYPES.USER);
+				askExpertHelp();			
+				submitRating(uid, RATING_TYPES.NOT_ANSWERING, RATING_SOURCE.CLIENT);
+			} 
+
+			else if(feedbackValue === RATING_TYPES.NOT_COMPLETE){
+				addToConversationHistory("Answer is not complete", MESSAGE_TYPES.USER);
+				askExpertHelp();
+				submitRating(uid, RATING_TYPES.NOT_COMPLETE, RATING_SOURCE.CLIENT);
+			}
+			else if(feedbackValue === RATING_TYPES.GOOD_ANSWER) {
+				showMessage("Thank you for your feedback, this will allow HAL to improve its knowledge.", MESSAGE_TYPES.BOT, false);
+				submitRating(uid, RATING_TYPES.GOOD_ANSWER, RATING_SOURCE.CLIENT);
+			}
+			$(`input:radio[name='rate-${unknownQuestionQid}']`).attr('disabled', true);
+		}
+		
+		function showFeedbackButtons(id) {
+			var conversationDiv = document.getElementById('conversation');
+			var msgDiv = document.createElement("div");
+			var para = document.createElement("P");
+			msgDiv.className = "feedbackBox";
+			para.appendChild(document.createTextNode("How do you rate this answer?"));
+			var radioDiv = document.createElement("div");
+			$(radioDiv).html(`
+			<p>
+			<label class="rateItem">
+				<input name="rate-${id}" type="radio" value="${RATING_TYPES.NOT_ANSWERING}" />
+				<span>Doesn't answer my question</span>
+			</label>    
+			</p>
+			<p>
+			<label class="rateItem">
+				<input name="rate-${id}" type="radio" value="${RATING_TYPES.NOT_COMPLETE}" />
+				<span>Answer is not complete</span>
+			</label>
+			</p>
+			<p>
+			<label class="rateItem">
+				<input name="rate-${id}" type="radio" value="${RATING_TYPES.GOOD_ANSWER}"/>
+				<span>This is a good answer</span>
+			</label>
+			</p>
+			`);
+
+			msgDiv.appendChild(para);
+			msgDiv.appendChild(radioDiv);
+			conversationDiv.appendChild(msgDiv);
+			conversationDiv.scrollTop = conversationDiv.scrollHeight;
+			$(msgDiv).find('input').change(function(){
+				feedbackClicked(id);
+			});
+		}
+
+        function pushChat() {
+			if(inputDisabled) {
+				return;
+			}
+			// if there is text to be sent...
+			var wisdomText = document.getElementById('wisdom');
+			if (wisdomText && wisdomText.value && wisdomText.value.trim().length > 0) {
+
+				// disable input to show we're sending it
+				var wisdom = wisdomText.value.trim();
+				disableInput();
+				// send it to the Lex runtime
+				var params = {
+					botAlias: '$LATEST',
+					botName: BOT_NAME,
+					inputText: wisdom,
+					userId: lexUserId,
+					sessionAttributes: sessionAttributes
+				};
+				showMessage(wisdom, MESSAGE_TYPES.USER);
+				lastMessage = wisdom;
+				isUnknownQuestion = false;
+
+				var handleLexMessage = function(data) { 
+					// capture the sessionAttributes for the next cycle
+					sessionAttributes = data.sessionAttributes;
+					// show response and/or error/dialog status
+					let responseMessage = data.message;
+					if(responseMessage === "Sorry I didn't understand, can you repeat?") {
+						showUnknownQuestion();
+					}
+					else if(responseMessage === "You stumped me! Sadly I don't know how to answer your question.") {
+						showUnknownQuestion();
+					}
+					else {
+						if (data.message) {
+							showMessage(data.message, MESSAGE_TYPES.BOT);
+
+							// handle questions requiring feedback
+							if(data.sessionAttributes && sessionAttributes.previous) {
+								var previous = JSON.parse(sessionAttributes.previous);
+								var qid = previous.qid;
+								if(qid && !qid.includes("NoFeedback.")) {
+									showFeedbackButtons(qid);
+								}
+							}
+						}
+					}						
+				}
+				lexruntime.postText(params, function(err, data) {
+					if (err) {
+						console.log(err.message);
+						console.log(err, err.stack);
+						if(err.message.includes("has status BUILDING")) {
+							showLearningMessage();
+							var checkLearning = function () {
+								lexruntime.postText(params, function(err, data) {
+									if(err){
+										console.log("HAL is still learning");
+										setTimeout(checkLearning, 1000)
+									}
+									else if(data) {
+										finishedLearning();
+										handleLexMessage(data);
+									}
+								});	
+							}
+							setTimeout(checkLearning, 1000)
+						}
+						else {
+							showMessage('Error:  ' + err.message + ' (see console for details)', MESSAGE_TYPES.ERROR)
+						}
+					}
+					if (data) {
+						handleLexMessage(data);
+					}
+					enableInput();
+					
+				});
+			}
+			return false;
+		}
+
+		$( document ).ready(function() {
+			
+			// handle user selected
+			var url = new URL(window.location.href);
+			var username = url.searchParams.get("user");
+			
+			if(username) {
+				if(username === "ajolie") {
+					user = {
+						name: "Angelina Jolie",
+						email: "ajolie@devosbgroup.onmicrosoft.com",
+						photo: "images/ajolie.jpg"
+					}
+				}
+				else if(username === "sjohansson") {
+					user = {
+						name: "Scarlet Johansson",
+						email: "sjohansson@devosbgroup.onmicrosoft.com",
+						photo: "images/sjohansson.jpg"
+					}
+				}
+				else if(username === "bpitt") {
+					user = {
+						name: "Brad Pitt",
+						email: "bpitt@devosbgroup.onmicrosoft.com",
+						photo: "images/bpitt.jpg"
+					}
+				}
+
+				
+			}
+			$('#profileName').text(user.name);
+			$('#profilePhoto').attr('src', user.photo);
+			$('#profileContainer').show();
+
+			setTimeout(function() { showMessage("Hello "+user.name+", this is HAL, how can I help you?", MESSAGE_TYPES.BOT); }, 800);
+		});	
+		
+	</script>
+</body>
+
+</html>

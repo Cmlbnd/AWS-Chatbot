@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>HAL - The expert network bot</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.437.0.min.js"></script>
+     <!-- Compiled and minified CSS -->
+	 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+	 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+     <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="container">
+		<h3 style="text-align:  center">
+			<img src="HAL_logo.png" height="80" alt="HAL - The expert network bot" style="margin-bottom: -25px"/>
+			HAL - The expert network bot
+		</h3>
+		<ul class="collapsible" style="margin-top: 30px">
+			<li>
+				<div class="collapsible-header"><i class="material-icons">people</i>Experts</div>
+				<div class="collapsible-body">
+					<table class="striped" id="expertsTable">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Email</th>
+								<th>Skills</th>
+							</tr>
+						</thead>						
+					</table>	
+				</div>
+			</li>
+			<li>
+				<div class="collapsible-header"><i class="material-icons">textsms</i>Unknown Questions</div>
+				<div class="collapsible-body">
+					<table class="striped" id="questionsTable">
+						<thead>
+							<tr>
+								<th style="width: 300px">Question</th>
+								<th style="text-align: center">Answered</th>
+								<th>Skills</th>
+								<th>Expert</th>
+								<th>Ratings</th>
+							</tr>
+						</thead>						
+					</table>
+
+				</div>
+			</li>
+			<li>
+				<div class="collapsible-header"><i class="material-icons">settings</i>Admin Operations</div>
+				<div class="collapsible-body">
+					<p><a class="waves-effect waves-light btn danger" id="resetHalBtn" style="width: 180px"><i class="material-icons left">warning</i>Reset HAL DB</a></p>
+					
+					<p><a class="waves-effect waves-light btn" target="_blank" style="width: 180px" href="https://bju7yzad46.execute-api.us-east-1.amazonaws.com/prod/pages/designer"><i class="material-icons left">border_color
+						</i>Q&A Designer</a></p>
+					
+					<p><a class="waves-effect waves-light btn" target="_blank" style="width: 180px" href="https://search-qnabot-elastic-16x8drir5zf0e-ph2splbwdbo7fglo4was3rho3a.us-east-1.es.amazonaws.com/_plugin/kibana/app/kibana#/dashboard/Default?_g=(refreshInterval:(display:Off,pause:!f,value:0),time:(from:now%2Fw,mode:quick,to:now%2Fw))&_a=(filters:!(),options:(darkTheme:!f),panels:!((col:9,id:Client-types,panelIndex:3,row:1,size_x:4,size_y:4,type:visualization),(col:1,id:Requests,panelIndex:4,row:1,size_x:8,size_y:4,type:visualization),(col:1,id:Incorrect-feedback-wordcloud,panelIndex:5,row:9,size_x:6,size_y:3,type:visualization),(col:7,id:Correct-feedback-wordcloud,panelIndex:6,row:9,size_x:6,size_y:3,type:visualization),(col:1,id:Logged-Utterances,panelIndex:7,row:5,size_x:12,size_y:4,type:visualization)),query:(query_string:(analyze_wildcard:!t,query:'*')),title:Default,uiState:(P-3:(vis:(legendOpen:!t))))"><i class="material-icons left">blur_on</i>Dashboard</a></p>
+					
+					<p>User: Admin</p>
+					<p>Pass: Welcome2OSB!</p>
+				</div>
+			</li>
+		</ul>
+	</div>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+	<script src="scripts.js"></script>
+	<script type="text/javascript">
+
+		const GET_STATS_URL = "https://ldy3aeach5.execute-api.us-east-1.amazonaws.com/test/stats"
+		const RESET_HAL_URL = "https://ldy3aeach5.execute-api.us-east-1.amazonaws.com/test/reset"
+		const QUESTION_PAGE_URL = "https://s3.amazonaws.com/hal-bot/question.html?uid="
+
+		$( document ).ready(function() {
+			$('.collapsible').collapsible();
+			
+			
+
+			$('#resetHalBtn').click(function () {
+				var r = confirm("Do you really want to reset HAL knowledge base? This will delete all questions answered by the experts from HAL.");
+				if (r == true) {
+					console.log("HAL is being reset");
+					$.get( RESET_HAL_URL, function( data ) {
+						alert("HAL Reset completed");
+					});
+				} else {
+					console.log("Reset cancelled");
+				}
+			});
+
+			$.get( GET_STATS_URL, function( data ) {
+				console.log(data);
+				
+				let experts = {};
+				for(var i = 0; i < data.skills.length; i++) {
+					let skill = data.skills[i];
+
+					for(var j = 0; j < skill.experts.length; j++) {
+						let expert = skill.experts[j];
+						if(!experts[expert.email]) {
+							experts[expert.email] = {
+								name: expert.firstName + " "+ expert.lastName,
+								email: expert.email,
+								skills: []
+							}
+						}
+						let skillText = skill.skill === "%noSkill%" ? "-" : skill.skill;
+						experts[expert.email].skills.push(skillText);
+					}
+				}
+
+				console.log(experts);
+				var tableExpertsBody = $('<tbody></tbody>')
+				for (var email in experts) {
+					if (experts.hasOwnProperty(email)) {
+						let expert = experts[email];
+						var row = $(`
+						<tr>
+							<td><b>${expert.name}</b></td>
+							<td>${expert.email}</td>
+							<td>${expert.skills.join("<br />")}</td>
+						</tr>`);
+						tableExpertsBody.append(row);
+					}
+				}
+				$('#expertsTable').append(tableExpertsBody);
+
+
+				var tableQuestionsBody = $('<tbody></tbody>')
+				var countRatings = function() {
+
+				}
+				for (var i = 0; i < data.questions.length; i++) {
+					let question = data.questions[i];
+					var row = $(`
+					<tr>
+						<td>${question.question}</td>
+						<td style="text-align: center">
+							${question.answer ? 
+								`<i class="material-icons tooltipped" data-position="bottom" data-tooltip="${question.answer}" >check</i>` : 
+								"<i class='material-icons'>close</i>"
+							}
+						</td>
+						<td>${question.skills.join("<br />")}</td>
+						<td>${question.expert.firstName} ${question.expert.lastName}</td>
+						<td>
+							<div style="display: flex" class="tooltipped" data-position="bottom" data-tooltip="Doesn't answer my question">
+								<i class="material-icons">star_border</i>
+								<span style="margin-left: 10px">${question.ratings ? question.ratings.filter(function(x){return x.rating==RATING_TYPES.NOT_ANSWERING}).length : 0}</span></div>
+							<div style="display: flex" class="tooltipped" data-position="bottom" data-tooltip="Answer is not complete">
+								<i class="material-icons">star_half</i>
+								<span style="margin-left: 10px">${question.ratings ? question.ratings.filter(function(x){return x.rating==RATING_TYPES.NOT_COMPLETE}).length : 0}</span></div>
+							</div>
+							<div style="display: flex" class="tooltipped" data-position="bottom" data-tooltip="This is a good answer">
+								<i class="material-icons">star</i> 
+								<span style="margin-left: 10px">${question.ratings ? question.ratings.filter(function(x){return x.rating==RATING_TYPES.GOOD_ANSWER}).length : 0}</span></div>
+							</div>
+						</td>
+						<td>
+							<a class="icon" href="${QUESTION_PAGE_URL + question.uid}" target="_blank"><i class="material-icons">assignment</i></a>
+						</td>
+					</tr>`);
+					tableQuestionsBody.append(row);
+					
+				}
+				$('#questionsTable').append(tableQuestionsBody);
+				$('.tooltipped').tooltip({inDuration: 0, outDuration: 0, enterDelay:0, exitDelay: 0, transitionMovement: 0 });
+			});
+		});	
+		
+	</script>
+</body>
+
+</html>
